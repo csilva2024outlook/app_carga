@@ -33,8 +33,8 @@ export class EmailService {
     userId: number,
   ): Promise<boolean> {
     try {
-      const adminEmail = "silvasilvacristhian.3@gmail.com";//dto.driverEmail;
-      const fromEmail ="silvasilvacristhian.3@gmail.com" ;//this.configService.get<string>('email.adminEmail');
+      const adminEmail =this.configService.get<string>('email.adminEmail');;//
+      const fromEmail =dto.driverEmail;;//
 
       // Construir los attachments desde los archivos subidos
       const attachments = files?.map((file) => {
