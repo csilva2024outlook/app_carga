@@ -32,7 +32,7 @@ export class ClientRequestsService {
     @InjectRepository(DriverCarInfo)
     private driverCarInfoRepository: Repository<DriverCarInfo>,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   private buildCargaImagePathFromRow(row: any): string {
     const created = row.created_at ? new Date(row.created_at) : new Date();
@@ -167,10 +167,10 @@ export class ClientRequestsService {
 
     if (
       (dto.status === ClientRequestStatus.CANCELLED &&
-      request.status !== ClientRequestStatus.CANCELLED) 
+        request.status !== ClientRequestStatus.CANCELLED)
       ||
       (dto.status === ClientRequestStatus.ACCEPTED &&
-      request.status !== ClientRequestStatus.ACCEPTED) 
+        request.status !== ClientRequestStatus.ACCEPTED)
       &&
       request.idDriverAssigned
     ) {
@@ -183,7 +183,7 @@ export class ClientRequestsService {
           where: { idDriver: driver.id },
         });
 
-        const fare = request.fareAssigned ??  0;
+        const fare = request.fareAssigned ?? 0;
         let commission = 0;
 
         if (fare > 0) {
@@ -198,10 +198,10 @@ export class ClientRequestsService {
 
           const currentSaldo = Number(driver.saldo ?? 0);
           let newSaldo = 0;
-          if(dto.status==ClientRequestStatus.ACCEPTED)
-          newSaldo = currentSaldo - commission;
-          else if(dto.status==ClientRequestStatus.CANCELLED)
-          newSaldo = currentSaldo + commission;
+          if (dto.status == ClientRequestStatus.ACCEPTED)
+            newSaldo = currentSaldo - commission;
+          else if (dto.status == ClientRequestStatus.CANCELLED)
+            newSaldo = currentSaldo + commission;
           driver.saldo = Number(newSaldo.toFixed(2));
 
           await this.userRepository.save(driver);
@@ -247,6 +247,7 @@ export class ClientRequestsService {
     destLat: number,
     destLng: number,
   ): Promise<DistanceMatrixResponse> {
+
     const values = await this.timeAndDistanceValuesRepository.findOne({
       where: { id: 1 },
     });
@@ -256,79 +257,80 @@ export class ClientRequestsService {
     }
 
     const apiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
-    
-    // Asegurarse que el formato sea latitud,longitud
-    const origins = `${originLat},${originLng}`;
-    const destinations = `${destLat},${destLng}`;
-    
-    console.log('Origins:', origins); // Para debug
-    console.log('Destinations:', destinations); // Para debug
-    
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origins}&destinations=${destinations}&units=metric&key=${apiKey}`;
+
+    const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+    const bodyRequest = {
+      origin: {
+        location: {
+          latLng: {
+            latitude: originLat,
+            longitude: originLng,
+          },
+        },
+      },
+      destination: {
+        location: {
+          latLng: {
+            latitude: destLat,
+            longitude: destLng,
+          },
+        },
+      },
+      travelMode: 'DRIVE',
+    };
 
     try {
-      const response = await axios.get(url);
-      const body = response.data;
+      const response = await axios.post(url, bodyRequest, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.localizedValues',
+        },
+      });
 
-      console.log('Google API Response:', JSON.stringify(body, null, 2)); // Para debug
+      const data = response.data;
 
-      if (body.status !== 'OK') {
+      if (!data.routes || data.routes.length === 0) {
         throw new BadRequestException(
-          `Respuesta invalida del API de Google: ${body.status}`,
+          'No se encontró ninguna ruta entre el origen y el destino.',
         );
       }
 
-      const element = body.rows[0].elements[0];
+      const route = data.routes[0];
 
-      if (element.status === 'ZERO_RESULTS') {
-        throw new BadRequestException(
-          'No se encontró ninguna ruta entre el origen y el destino. Verifica las coordenadas.',
-        );
-      }
-
-      if (element.status === 'NOT_FOUND') {
-        throw new BadRequestException(
-          'Una de las ubicaciones no se pudo geocodificar. Verifica las coordenadas.',
-        );
-      }
-
-      if (element.status !== 'OK') {
-        throw new BadRequestException(
-          `No se pudo calcular la ruta: ${element.status}`,
-        );
-      }
-
-      const distanceText = element.distance.text;
-      const distanceValue = element.distance.value;
-
-      const durationText = element.duration.text;
-      const durationValue = element.duration.value;
+      const distanceValue = route.distanceMeters; // metros
+      const durationValue = parseInt(route.duration.replace('s', '')); // segundos
 
       const km = distanceValue / 1000;
       const minutes = durationValue / 60;
-      const recommendedValue = values.kmValue * km + values.minValue * minutes;
+
+      const recommendedValue =
+        values.kmValue * km + values.minValue * minutes;
 
       const responseDTO: DistanceMatrixResponse = {
-        originAddresses: body.origin_addresses[0],
-        destinationAddresses: body.destination_addresses[0],
+        originAddresses: 'Origen calculado',
+        destinationAddresses: 'Destino calculado',
         distance: {
-          text: distanceText,
+          text: `${km.toFixed(2)} km`,
           value: distanceValue,
         },
         duration: {
-          text: durationText,
+          text: `${minutes.toFixed(0)} mins`,
           value: durationValue,
         },
         recommendedValue: recommendedValue.toFixed(2),
       };
 
       return responseDTO;
+
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      console.error('Error en getTimeAndDistance:', error);
-      throw new BadRequestException('Error al obtener distancia y tiempo');
+      console.error('Error en Routes API:', error?.response?.data || error);
+      //
+      throw new BadRequestException(
+        'Error al obtener distancia y tiempo (Routes API)',
+      );
     }
   }
+
 }
