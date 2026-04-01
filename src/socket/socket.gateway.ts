@@ -26,7 +26,7 @@ interface DriverPositionPayload {
 interface ClientRequestPayload {
   id: number;
   id_client: number;
-    id_client_request: number;
+  id_client_request: number;
   fare_offered: number;
   pickup_lat: number;
   pickup_lng: number;
@@ -52,25 +52,24 @@ interface DriverAssignedPayload {
 interface TripPositionPayload {
   id_client_request: number;
   id_driver: number;
-   id_client: number;
+  id_client: number;
   lat: number;
   lng: number;
 }
 
 interface TripStatusPayload {
   id_client_request: number;
-    id_client: number;
+  id_client: number;
   status: string;
 }
 
-@WebSocketGateway(9092, {
+@WebSocketGateway({
   cors: {
     origin: '*',
   },
 })
 export class SocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -94,7 +93,7 @@ export class SocketGateway
     @ConnectedSocket() client: Socket,
   ): void {
     this.logger.log(`Message received: ${JSON.stringify(payload)}`);
-    
+
     // Emit back to sender
     client.emit('new_message_response', {
       message: payload.message,
@@ -109,7 +108,7 @@ export class SocketGateway
     @MessageBody() payload: DriverPositionPayload,
   ): void {
     this.logger.log(`Driver position changed: ${JSON.stringify(payload)}`);
-    
+
     // Broadcast to all clients
     this.server.emit('new_driver_position', {
       id_driver: payload.id_driver,
@@ -122,12 +121,12 @@ export class SocketGateway
   @SubscribeMessage('new_client_request')
   handleNewClientRequest(@MessageBody() payload: ClientRequestPayload): void {
     this.logger.log(`New client request: ${JSON.stringify(payload)}`);
-    
+
     // Broadcast to all drivers
     this.server.emit('created_client_request', {
       id: payload.id,
       id_client_request: payload.id_client_request,
-        id_client: payload.id_client,
+      id_client: payload.id_client,
       fare_offered: payload.fare_offered,
       pickup_lat: payload.pickup_lat,
       pickup_lng: payload.pickup_lng,
@@ -142,7 +141,7 @@ export class SocketGateway
   @SubscribeMessage('new_driver_offer')
   handleNewDriverOffer(@MessageBody() payload: DriverOfferPayload): void {
     this.logger.log(`New driver offer: ${JSON.stringify(payload)}`);
-    
+
     // Broadcast to all clients
     this.server.emit('created_driver_offer', {
       id: payload.id,
@@ -154,20 +153,20 @@ export class SocketGateway
   }
 
   @SubscribeMessage('register_driver')
-registerDriver(
-  @MessageBody() payload: { id_driver: number },
-  @ConnectedSocket() client: Socket,
-): void {
-  this.logger.log(`Register driver: ${payload.id_driver} - socket: ${client.id}`);
-  client.join(`driver_${payload.id_driver}`);
-}
- 
+  registerDriver(
+    @MessageBody() payload: { id_driver: number },
+    @ConnectedSocket() client: Socket,
+  ): void {
+    this.logger.log(`Register driver: ${payload.id_driver} - socket: ${client.id}`);
+    client.join(`driver_${payload.id_driver}`);
+  }
+
   @SubscribeMessage('new_driver_assigned')
   handleDriverAssigned(@MessageBody() payload: DriverAssignedPayload): void {
     this.logger.log(`Driver assigned: ${JSON.stringify(payload)}`);
-    
+
     // Broadcast to all clients
-    this.server.to("driver_"+payload.id_driver).emit('created_driver_assigned', {
+    this.server.to("driver_" + payload.id_driver).emit('created_driver_assigned', {
       id_client_request: payload.id_client_request,
       id_driver: payload.id_driver,
       fare_assigned: payload.fare_assigned,
@@ -178,9 +177,9 @@ registerDriver(
   handleTripDriverPositionChange(
     @MessageBody() payload: TripPositionPayload,
   ): void {
-    this.logger.log(`Trip driver position changed: ${JSON.stringify(payload)}`,);  
+    this.logger.log(`Trip driver position changed: ${JSON.stringify(payload)}`,);
     // Broadcast to all clients
-    this.server.to("driver_"+payload.id_client).emit('trip_driver_position_changed', {
+    this.server.to("driver_" + payload.id_client).emit('trip_driver_position_changed', {
       id_client_request: payload.id_client,
       id_driver: payload.id_driver,
       lat: payload.lat,
@@ -192,11 +191,11 @@ registerDriver(
   @SubscribeMessage('update_status_trip')
   handleTripStatusUpdate(@MessageBody() payload: TripStatusPayload): void {
     this.logger.log(`Trip status updated: ${JSON.stringify(payload)}`);
-    
+
     // Broadcast to all clients
     this.server.emit(`new_status_trip/${payload.id_client_request}`, {
       id_client_request: payload.id_client_request,
-          id_client: payload.id_client,
+      id_client: payload.id_client,
       status: payload.status,
       timestamp: new Date(),
     });
