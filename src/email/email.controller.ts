@@ -1,9 +1,9 @@
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  UseGuards, 
-  HttpStatus, 
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  HttpStatus,
   HttpException,
   UseInterceptors,
   UploadedFiles,
@@ -18,7 +18,7 @@ import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer
 
 @Controller('email')
 export class EmailController {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(private readonly emailService: EmailService) { }
 
   private static readonly filesMulterOptions: MulterOptions = {
     limits: {
@@ -41,12 +41,13 @@ export class EmailController {
     try {
       // Usar userId del DTO si está presente, sino usar el del token JWT
       const userId = dto.userId || user.id;
-      
-      await this.emailService.sendDriverPermissionRequest(dto, files, userId);
-      
+
+      const messageId = await this.emailService.sendDriverPermissionRequest(dto, files, userId);
+
       return {
         success: true,
         message: 'Solicitud enviada exitosamente',
+        messageId,
       };
     } catch (error) {
       throw new HttpException(

@@ -2,28 +2,34 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as nodemailer from 'nodemailer';
+import * as brevo from '@getbrevo/brevo';
+import { readFile } from 'fs/promises';
 import { DriverPermissionRequestDto } from './dto/driver-permission-request.dto';
 import { User, UserStatusType } from '../entities/user.entity';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter;
+  private readonly brevoClient: brevo.BrevoClient;
+  private static readonly emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   constructor(
     private configService: ConfigService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('email.host'),
-      port: this.configService.get<number>('email.port'),
-      secure: this.configService.get<boolean>('email.secure'), // true for 465, false for other ports
-      auth: {
-        user: this.configService.get<string>('email.user'),
-        pass: this.configService.get<string>('email.password'),
-      },
+    const apiKey =
+      this.configService.get<string>('email.apiKey') ||
+      this.configService.get<string>('email.password');
+
+    if (!apiKey) {
+      this.logger.warn(
+        'No se encontro API key de Brevo. Configura EMAIL_BREVO_API_KEY o EMAIL_PASSWORD.',
+      );
+    }
+
+    this.brevoClient = new brevo.BrevoClient({
+      apiKey: apiKey || '',
     });
   }
 
@@ -31,37 +37,57 @@ export class EmailService {
     dto: DriverPermissionRequestDto,
     files: Express.Multer.File[],
     userId: number,
-  ): Promise<boolean> {
+  ): Promise<string | undefined> {
     try {
-      const adminEmail =this.configService.get<string>('email.adminEmail');;//
-      const fromEmail =dto.driverEmail;;//
+      const adminEmail = this.configService.get<string>('email.adminEmail');
+      const fromEmail = this.configService.get<string>('email.from');
+
+      if (!fromEmail || !EmailService.emailPattern.test(fromEmail)) {
+        throw new Error(
+          'EMAIL_FROM invalido o no configurado. Debe ser un sender valido/verificado en Brevo.',
+        );
+      }
+
+      if (!adminEmail || !EmailService.emailPattern.test(adminEmail)) {
+        throw new Error('EMAIL_ADMIN invalido o no configurado.');
+      }
 
       // Construir los attachments desde los archivos subidos
-      const attachments = files?.map((file) => {
+      const attachments: Array<{ name: string; content: string }> = [];
+
+      for (const file of files || []) {
         if (file.buffer) {
-          // Archivo en memoria
-          return {
-            filename: file.originalname,
-            content: file.buffer,
-            contentType: file.mimetype,
-          };
-        } else if (file.path) {
-          // Archivo en disco
-          return {
-            filename: file.originalname,
-            path: file.path,
-          };
-        } else {
-          // Fallback: no se puede adjuntar
-          return null;
+          attachments.push({
+            name: file.originalname,
+            content: file.buffer.toString('base64'),
+          });
+          continue;
         }
-      }).filter(Boolean) || [];
+
+        if (file.path) {
+          const fileContent = await readFile(file.path);
+          attachments.push({
+            name: file.originalname,
+            content: fileContent.toString('base64'),
+          });
+        }
+      }
 
       const mailOptions = {
-        from: fromEmail,
-        to: adminEmail,
+        sender: {
+          email: fromEmail,
+        },
+        to: [
+          {
+            email: dto.driverEmail,
+          },
+        ],
+        replyTo: {
+          email: dto.driverEmail,
+          name: dto.driverName,
+        },
         subject: `Nueva Solicitud de Permiso de Conductor - ${dto.driverName}`,
-        html: `
+        htmlContent: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Nueva Solicitud de Permiso de Conductor</h2>
             
@@ -89,22 +115,27 @@ export class EmailService {
             </div>
           </div>
         `,
-        attachments,
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email enviado exitosamente: ${info.messageId}`);
-      
+      if (attachments.length > 0) {
+        mailOptions['attachment'] = attachments;
+      }
+
+      const info = await this.brevoClient.transactionalEmails.sendTransacEmail(mailOptions);
+      this.logger.log(
+        `Email aceptado por Brevo. messageId=${info.messageId}, from=${fromEmail}, to=${adminEmail}, attachments=${attachments.length}`,
+      );
+
       // Actualizar el estado del usuario a SOLICITUD_CONDUCTOR
       await this.userRepository.update(userId, {
         statusType: UserStatusType.SOLICITUD_CONDUCTOR,
         requestDate: new Date(),
         comments: dto.comment,
       });
-      
+
       this.logger.log(`Usuario ${userId} actualizado a estado SOLICITUD_CONDUCTOR`);
-      
-      return true;
+
+      return info.messageId;
     } catch (error) {
       this.logger.error('Error al enviar email:', error);
       throw error;

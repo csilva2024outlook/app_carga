@@ -6,6 +6,7 @@ export default registerAs('email', () => ({
   secure: process.env.EMAIL_SECURE === 'true' || false,
   user: process.env.EMAIL_USER || '',
   password: process.env.EMAIL_PASSWORD || '',
+  apiKey: process.env.EMAIL_BREVO_API_KEY || process.env.EMAIL_PASSWORD || '',
   from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@appcarga.com',
   adminEmail: process.env.EMAIL_ADMIN || process.env.EMAIL_USER || 'admin@appcarga.com',
 }));
