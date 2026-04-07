@@ -39,7 +39,7 @@ export class EmailService {
     userId: number,
   ): Promise<string | undefined> {
     try {
-      const adminEmail = this.configService.get<string>('email.adminEmail');
+      const adminEmail = this.configService.get<string>('email.user');
       const fromEmail = this.configService.get<string>('email.from');
 
       if (!fromEmail || !EmailService.emailPattern.test(fromEmail)) {
@@ -49,7 +49,7 @@ export class EmailService {
       }
 
       if (!adminEmail || !EmailService.emailPattern.test(adminEmail)) {
-        throw new Error('EMAIL_ADMIN invalido o no configurado.');
+        throw new Error('EMAIL_USER invalido o no configurado.');
       }
 
       // Construir los attachments desde los archivos subidos
@@ -79,7 +79,7 @@ export class EmailService {
         },
         to: [
           {
-            email: dto.driverEmail,
+            email: adminEmail,
           },
         ],
         replyTo: {
