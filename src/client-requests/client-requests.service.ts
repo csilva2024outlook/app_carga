@@ -110,7 +110,7 @@ export class ClientRequestsService {
               cr.pickup_position,
               ST_GeomFromText('POINT(${driverLng} ${driverLat})', 4326)
             ) <= ${radius}
-      ORDER BY distance ASC
+      ORDER BY created_at DESC
     `;
 
     const results = await this.clientRequestRepository.query(query);
@@ -123,10 +123,10 @@ export class ClientRequestsService {
 
   async getByClient(idClient: number): Promise<ClientRequest[]> {
     return this.clientRequestRepository.find({
-      where: { idClient },
+      where: { idClient, status: ClientRequestStatus.FINISHED },
       relations: ['client', 'driverAssigned'],
       order: { createdAt: 'DESC' },
-      take: 10,
+      take: 20,
     });
   }
 
