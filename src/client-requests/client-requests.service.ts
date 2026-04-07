@@ -166,14 +166,9 @@ export class ClientRequestsService {
     }
 
     if (
-      (dto.status === ClientRequestStatus.CANCELLED &&
-        request.status !== ClientRequestStatus.CANCELLED)
-      ||
-      (dto.status === ClientRequestStatus.ACCEPTED &&
-        request.status !== ClientRequestStatus.ACCEPTED)
-      &&
-      request.idDriverAssigned
-    ) {
+      (dto.status === ClientRequestStatus.FINISHED
+        && request.idDriverAssigned
+      )) {
       const driver = await this.userRepository.findOne({
         where: { id: request.idDriverAssigned },
       });
@@ -198,10 +193,9 @@ export class ClientRequestsService {
 
           const currentSaldo = Number(driver.saldo ?? 0);
           let newSaldo = 0;
-          if (dto.status == ClientRequestStatus.ACCEPTED)
-            newSaldo = currentSaldo - commission;
-          else if (dto.status == ClientRequestStatus.CANCELLED)
-            newSaldo = currentSaldo + commission;
+
+          newSaldo = currentSaldo - commission;
+
           driver.saldo = Number(newSaldo.toFixed(2));
 
           await this.userRepository.save(driver);
